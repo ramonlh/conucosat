@@ -252,7 +252,6 @@ int enviaID()    // no es por petición, es siempre a inciativa de satserver
    strcat(wifi.inputstr,cmdmyid);  strcat(wifi.inputstr,wifi._myIP); 
    strcatP(wifi.inputstr,guion);strcat(wifi.inputstr,itoa(wifi._myID,buff,10));
    dserial.println(wifi.inputstr);
-   dserial.println(wifi._gwIP);
    int auxerr=wifi.SendMsg(mysocket,wifi._gwIP,itoa(wifi._gwPort,buff,10),wifi.inputstr,3000);
    wifi.clearInput();
    return auxerr;
@@ -302,10 +301,10 @@ int enviaJson(boolean newsocket)    // puede ser por tetición o a iniciativa de
    formaJson();
    dserial.println(wifi.inputstr);
    if (newsocket)
-     dserial.println(wifi.SendMsg(mysocket,wifi._gwIP,itoa(wifi._gwPort,buff,10),wifi.inputstr,3000));
+     int auxerr=wifi.SendMsg(mysocket,wifi._gwIP,itoa(wifi._gwPort,buff,10),wifi.inputstr,3000);
    else
      {
-     dserial.println(wifi.Send(wifi.lastsocket,wifi.inputstr,3000));
+     int auxerr=wifi.Send(wifi.lastsocket,wifi.inputstr,3000);
 //     wifi.CIPClose(wifi.lastsocket);
      }
   }
@@ -325,7 +324,7 @@ void procesaSet()    // procesa comandos SET...
   {
 //  printS(procesaset);printStS(paren_i,wifi._comando,guion);
 //  dserial.print(wifi._parametros); printlnS(paren_f);
-  mysocket=wifi.inputstr[5]-48;
+  mysocket=wifi.inputstr[5]-111;
   if (strcmp(wifi._comando,ton)==0)    // on
     {
      int auxpin=atoi(wifi._parametros);     // pin
@@ -783,9 +782,9 @@ void setup()
        }
   if (modo==2)    // cliente gateway
     {
-    printS(enviandoid);      dserial.println(enviaID());
+    printS(enviandoid);      enviaID();
     delay(1000);
-    printS(enviandojson);    dserial.println(enviaJson(true));
+    printS(enviandojson);    enviaJson(true);
     }
   printlnS(ready);
 }
@@ -878,10 +877,7 @@ void loop()
     iniciando = false;
     mact300=millis();
     if (modo==2)
-      {  
-      enviaID();
-      dserial.println(enviaID());
-      }
+      enviaID();   
     }
   if ((millis() > (mact3600 + 3600000)))    // cada hora, 3600 segundos
     {
@@ -909,5 +905,5 @@ void loop()
 void serialEvent() 
   {
   if (!mododebug)
-    wifi.procSerialEvent1();
+    wifi.procSerialEvent1(false);
   }
