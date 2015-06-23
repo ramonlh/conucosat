@@ -94,6 +94,7 @@ char jsonr[]="/jsonr";
 char cmdmyid[]="INF myid=";
 char ton[]="/on";        
 char toff[]="/off";     
+char mainr[]="/mainr";      
 
 void pinVAL(byte pin, byte value)    // actua sobre el pin real 
   { 
@@ -309,6 +310,28 @@ int enviaJson(boolean newsocket)    // puede ser por tetición o a iniciativa de
      }
   }
  
+int enviaJsonr()    // puede ser por tetición o a iniciativa de satserver
+  {
+   char buff[6];memset(buff,0,sizeof(buff));
+   formaJson();
+   dserial.println(wifi.inputstr);
+   int auxerr=wifi.Send(wifi.lastsocket,wifi.inputstr,3000);
+  }
+ 
+int enviamainr(boolean newsocket)    // puede ser por tetición o a iniciativa de satserver
+  {
+   char buff[6];memset(buff,0,sizeof(buff));
+   formaJson();
+   dserial.println(wifi.inputstr);
+   if (newsocket)
+     int auxerr=wifi.SendMsg(mysocket,wifi._gwIP,itoa(wifi._gwPort,buff,10),wifi.inputstr,3000);
+   else
+     {
+     int auxerr=wifi.Send(wifi.lastsocket,wifi.inputstr,3000);
+//     wifi.CIPClose(wifi.lastsocket);
+     }
+  }
+ 
 void procesaJson()    // procesa texto JSON...
   {
   printS(procesajson);printStS(paren_i,wifi.inputstr,paren_f);
@@ -322,9 +345,7 @@ void procesaInf()    // procesa comandos INF...
 
 void procesaSet()    // procesa comandos SET...
   {
-//  printS(procesaset);printStS(paren_i,wifi._comando,guion);
-//  dserial.print(wifi._parametros); printlnS(paren_f);
-  mysocket=wifi.inputstr[5]-111;
+  wifi.lastsocket=wifi.inputstr[5]-111;
   if (strcmp(wifi._comando,ton)==0)    // on
     {
      int auxpin=atoi(wifi._parametros);     // pin
@@ -345,7 +366,6 @@ void procesaSet()    // procesa comandos SET...
   }
   
 int auxlength=0;  
-int myid;
 
 int envpart (char *cad, boolean sumar)
   {
@@ -354,8 +374,7 @@ int envpart (char *cad, boolean sumar)
   dserial.print("-"); dserial.println(auxlength);
 //  dserial.print("-"); dserial.println(cad);
   delay(30);
-  wifi.tt=0;
-  int auxerr=wifi.Send(myid,cad,3000);
+  int auxerr=wifi.Send(wifi.lastsocket,cad,3000);
   return auxerr;
   }
 
@@ -600,14 +619,22 @@ void saveparm()
 void procesaGet()    // procesa peticiones GET ...
   {
   auxlength=0;  
-  myid=wifi.inputstr[5]-48;
-  printS(procesaget,dospuntos); dserial.print(myid); printS(coma); 
   dserial.println(wifi._comando);
   if (modo==2)    // gateway
     {
      if (strcmp(wifi._comando,json)==0)    // /json
        {
        enviaJson(false); // es respuesta
+       return;
+       }
+     if (strcmp(wifi._comando,mainr)==0)    // /mainr
+       {
+       enviaJson(false); // es respuesta
+       return;
+       }
+     if (strcmp(wifi._comando,jsonr)==0)    // /jsonr
+       {
+       enviaJsonr(); // es respuesta
        return;
        }
      }
@@ -905,5 +932,5 @@ void loop()
 void serialEvent() 
   {
   if (!mododebug)
-    wifi.procSerialEvent1(false);
+    wifi.procSerialEvent1();
   }
