@@ -9,7 +9,7 @@
 #include "EEPROMAnything.h"
 #include "OneWire.h"
 #include "DallasTemperature.h"
-#include <DHT.h>
+//#include <DHT.h>
 #include <SoftwareSerial.h>
 #include "esp8266.h"
 #include "commontexts.h"
@@ -25,7 +25,7 @@
 #define maxSDr 6     // número salidas digitales + relés
 #define maxEAr 4     // número entradas analógicassave
 byte edPin[maxEDr]={12,13};      // entradas digitales
-byte sdPin[maxSDr]={2,3,4,5,6,7};        // salidas digitales + relés
+byte sdPin[maxSDr]={2,3,4,5,6,7}; // salidas digitales + relés
 byte anPin[maxEAr]={0,1,2,3};    // entradas analógicas
 #define espResetPin 18  // A4
 
@@ -94,11 +94,11 @@ char jsonr[]="/jsonr";
 char cmdmyid[]="INF myid=";
 char ton[]="/on";        
 char toff[]="/off";     
-char mainr[]="/mainr";      
+char mainr[]="/mainr";   
 
 void pinVAL(byte pin, byte value)    // actua sobre el pin real 
   { 
-    digitalWrite(pin, valor[value]);
+    midigitalWrite(pin, valor[value]);
     setbit8(bestado, pin, value);
     EEPROM.write(dirEEestado, bestado[0]);    
     EEPROM.write(dirEEestado+1, bestado[1]);    
@@ -186,8 +186,18 @@ void strcatP(char *dest, const prog_uchar *orig1,const prog_uchar *orig2,const p
 void strcatP(char *dest, const prog_uchar *orig1,const prog_uchar *orig2,const prog_uchar *orig3,const prog_uchar *orig4)
   { strcatP(dest,orig1,orig2);strcatP(dest,orig3,orig4);}
 
+void strcatPPPt(char *dest, const prog_uchar *orig1,const prog_uchar *orig2,const prog_uchar *orig3,char *orig4)
+  { strcatP(dest,orig1,orig2,orig3);strcat(dest,orig4);}
+  
+void strcatPt(char *dest, const prog_uchar *orig1,char *orig2)
+  { strcatP(dest,orig1); strcat(dest,orig2);}
+
 void strcatPtP(char *dest, const prog_uchar *orig1,char *orig2,const prog_uchar *orig3)
-  { strcatP(dest,orig1); strcat(dest,orig2);strcatP(dest,orig3);}
+  { strcatPt(dest,orig1,orig2);strcatP(dest,orig3);}
+
+void strcatPtPtP(char *dest, const prog_uchar *orig1,char *orig2,const prog_uchar *orig3,char *orig4,const prog_uchar *orig5)
+  { strcatPt(dest,orig1,orig2); 
+    strcatPtP(dest,orig3,orig4,orig5);}
 
 void printS(const prog_uchar *str)
   {
@@ -207,13 +217,7 @@ void printS(const prog_uchar *str1,const prog_uchar *str2,const prog_uchar *str3
   {  printS(str1,str2,str3);printS(str4,str5);  }
 
 void printlnS(const prog_uchar *str)
-  {  printS(str);  dserial.println();}
-void printlnS(const prog_uchar *str1,const prog_uchar *str2)
-  {  printS(str1); printlnS(str2);  }
-void printlnS(const prog_uchar *str1,const prog_uchar *str2,const prog_uchar *str3)
-  {  printS(str1); printS(str2); printlnS(str3);  }
-void printlnS(const prog_uchar *str1,const prog_uchar *str2,const prog_uchar *str3,const prog_uchar *str4)
-  {  printS(str1,str2,str3); printlnS(str4);  }
+  {  printS(str,crlf);  }
   
 void printSt(const prog_uchar *str1, char *str2)
   { printS(str1);dserial.print(str2);}
@@ -222,7 +226,7 @@ void printStS(const prog_uchar *str1, char *str2,const prog_uchar *str3)
 
 void iniciavalores()
   {
-  printlnS(iniciandovalores);
+  printS(iniciandovalores,crlf);
   for (int i=0;i<1023;i++) EEPROM.write(i,0);
   newmodo=0;                      // modo fábrica
   wifi._myID=myIDddefault;     // ID=123
@@ -251,11 +255,27 @@ int enviaID()    // no es por petición, es siempre a inciativa de satserver
    char buff[6]; memset(buff,0,sizeof(buff));
    wifi.clearInput();
    strcat(wifi.inputstr,cmdmyid);  strcat(wifi.inputstr,wifi._myIP); 
-   strcatP(wifi.inputstr,guion);strcat(wifi.inputstr,itoa(wifi._myID,buff,10));
+   strcatPt(wifi.inputstr,guion,itoa(wifi._myID,buff,10));
    dserial.println(wifi.inputstr);
    int auxerr=wifi.SendMsg(mysocket,wifi._gwIP,itoa(wifi._gwPort,buff,10),wifi.inputstr,3000);
    wifi.clearInput();
    return auxerr;
+  }
+  
+int midigitalRead(byte p)
+  {
+    if (p<8)
+      bitRead(PORTD,p);
+    else
+      bitRead(PORTB,p);
+  }
+
+int midigitalWrite(byte p, byte value)
+  {
+    if (p<8)
+      bitWrite(PORTD,p,value);
+    else
+      bitWrite(PORTB,p,value);
   }
 
 void formaJson()    // compone el texto json y lo guarda en wifi._inputstr
@@ -263,29 +283,22 @@ void formaJson()    // compone el texto json y lo guarda en wifi._inputstr
    char buff[20]; memset(buff,0,sizeof(buff));
    int val=0; 
    wifi.clearInput();
-   strcatP(wifi.inputstr,llave_i,ID, dospuntos);
-   strcat(wifi.inputstr, itoa(wifi._myID,buff,10));  
-   strcatP(wifi.inputstr,coma);
+   strcatP(wifi.inputstr,llave_i,ID);
+   strcatPtP(wifi.inputstr, dospuntos, itoa(wifi._myID,buff,10),coma);
    for (int i=0; i<maxEAr; i++)
      {
-     strcatPtP(wifi.inputstr,letraa,itoa(i+1,buff,10),dospuntos);
      val=analogRead(anPin[i]);
-     strcat(wifi.inputstr,itoa(val,buff,10));
-     strcatP(wifi.inputstr,coma);
+     strcatPtPtP(wifi.inputstr,letraa,itoa(i+1,buff,10),dospuntos,itoa(val,buff,10),coma);
      }
    for (int i=0; i<maxEDr; i++)
      {
-     strcatPtP(wifi.inputstr,tdi,itoa(i+1,buff,10),dospuntos);
-     val=digitalRead(edPin[i]);
-     strcat(wifi.inputstr,itoa(val,buff,10));
-     strcatP(wifi.inputstr,coma);
+     val=midigitalRead(edPin[i]);
+     strcatPtPtP(wifi.inputstr,tdi,itoa(i+1,buff,10),dospuntos,itoa(val,buff,10),coma);
      }
    for (int i=0; i<maxSDr; i++)
      {
-     strcatPtP(wifi.inputstr,tds,itoa(i+1,buff,10),dospuntos);
      val=getbit8(bestado,sdPin[i]);
-     strcat(wifi.inputstr,itoa(val,buff,10));
-     strcatP(wifi.inputstr,coma);
+     strcatPtPtP(wifi.inputstr,tds,itoa(i+1,buff,10),dospuntos,itoa(val,buff,10),coma);
      }
    for (int i=0; i<maxTemp; i++)
      {
@@ -293,6 +306,39 @@ void formaJson()    // compone el texto json y lo guarda en wifi._inputstr
      strcat(wifi.inputstr,itoa(valoresTemp[i],buff,10));
      if (i < maxTemp-1) strcatP(wifi.inputstr,coma);
      }
+   strcatP(wifi.inputstr,llave_f);
+  }
+  
+void formaJsonConf()    // compone el texto json y lo guarda en wifi._inputstr
+  {
+   char buff[20]; memset(buff,0,sizeof(buff));
+   int val=0; 
+   wifi.clearInput();
+   strcatP(wifi.inputstr,llave_i,ID);   
+   strcatPtP(wifi.inputstr, dospuntos, itoa(wifi._myID,buff,10), coma);   
+   strcatP(wifi.inputstr, modot,dospuntos);   
+   strcat(wifi.inputstr,itoa(modo,buff,10));
+   for (int j=0;j<3;j++)
+     {
+     strcatP(wifi.inputstr,coma);
+     strcatPtP(wifi.inputstr,letras,itoa(j,buff,10),dospuntos);
+     for (int i=0; i<8; i++)
+       {
+       strcat(wifi.inputstr,addr[j][i]<16?"0":itoa(addr[j][i]/16,buff,16));
+       strcat(wifi.inputstr,itoa(addr[j][i]%16,buff,16));
+       }
+     }
+   strcatPPPt(wifi.inputstr,coma,apssidt2,dospuntos,wifi._APssid);
+   strcatPPPt(wifi.inputstr,coma,appasst2,dospuntos,wifi._APpass);
+   strcatPPPt(wifi.inputstr,coma,ch,dospuntos,wifi._APch);
+   strcatPPPt(wifi.inputstr,coma,enc,dospuntos,wifi._APenc);
+   strcatPPPt(wifi.inputstr,coma,rtssidt2,dospuntos,wifi._RTssid);
+   strcatPPPt(wifi.inputstr,coma,rtpasst2,dospuntos,wifi._RTpass);
+   strcatPPPt(wifi.inputstr,coma,gwssidt2,dospuntos,wifi._GWssid);
+   strcatPPPt(wifi.inputstr,coma,gwpasst2,dospuntos,wifi._GWpass);
+   strcatPPPt(wifi.inputstr,coma,gwip2,dospuntos,wifi._gwIP);
+   strcatPPPt(wifi.inputstr,coma,gwport2,dospuntos,itoa(wifi._gwPort,buff,10));
+   strcatPPPt(wifi.inputstr,coma,tperact,dospuntos,itoa(peract,buff,10));
    strcatP(wifi.inputstr,llave_f);
   }
   
@@ -304,13 +350,10 @@ int enviaJson(boolean newsocket)    // puede ser por tetición o a iniciativa de
    if (newsocket)
      int auxerr=wifi.SendMsg(mysocket,wifi._gwIP,itoa(wifi._gwPort,buff,10),wifi.inputstr,3000);
    else
-     {
      int auxerr=wifi.Send(wifi.lastsocket,wifi.inputstr,3000);
-//     wifi.CIPClose(wifi.lastsocket);
-     }
   }
  
-int enviaJsonr()    // puede ser por tetición o a iniciativa de satserver
+int enviaJsonr()    // puede ser por petición o a iniciativa de satserver
   {
    char buff[6];memset(buff,0,sizeof(buff));
    formaJson();
@@ -318,18 +361,15 @@ int enviaJsonr()    // puede ser por tetición o a iniciativa de satserver
    int auxerr=wifi.Send(wifi.lastsocket,wifi.inputstr,3000);
   }
  
-int enviamainr(boolean newsocket)    // puede ser por tetición o a iniciativa de satserver
+int enviamainr(boolean newsocket)    // puede ser por petición o a iniciativa de satserver
   {
    char buff[6];memset(buff,0,sizeof(buff));
-   formaJson();
+   formaJsonConf();
    dserial.println(wifi.inputstr);
    if (newsocket)
      int auxerr=wifi.SendMsg(mysocket,wifi._gwIP,itoa(wifi._gwPort,buff,10),wifi.inputstr,3000);
    else
-     {
      int auxerr=wifi.Send(wifi.lastsocket,wifi.inputstr,3000);
-//     wifi.CIPClose(wifi.lastsocket);
-     }
   }
  
 void procesaJson()    // procesa texto JSON...
@@ -346,36 +386,27 @@ void procesaInf()    // procesa comandos INF...
 void procesaSet()    // procesa comandos SET...
   {
   wifi.lastsocket=wifi.inputstr[5]-111;
-  if (strcmp(wifi._comando,ton)==0)    // on
+  if ((strcmp(wifi._comando,ton)==0) || (strcmp(wifi._comando,toff)==0))   // on off
     {
      int auxpin=atoi(wifi._parametros);     // pin
      if (auxpin <= maxSDr) 
-       pinVAL(sdPin[auxpin-1],1);
+       pinVAL(sdPin[auxpin-1],((strcmp(wifi._comando,ton)==0)?1:0));
      enviaJson(false);  // es respuesta
      return;
     }
-  else
-    if (strcmp(wifi._comando,toff)==0)    // off
-      {
-       int auxpin=atoi(wifi._parametros);     // pin
-       if (auxpin <= maxSDr) 
-         pinVAL(sdPin[auxpin-1],0);
-       enviaJson(false);  // es respuesta
-       return;
-      }
   }
   
 int auxlength=0;  
 
 int envpart (char *cad, boolean sumar)
   {
+  char buff[4];
   if (sumar) auxlength=auxlength+strlen(cad);  
-  dserial.print(strlen(cad));
-  dserial.print("-"); dserial.println(auxlength);
+  dserial.println(strlen(cad));
+//  dserial.print("-"); dserial.println(auxlength);
 //  dserial.print("-"); dserial.println(cad);
   delay(30);
-  int auxerr=wifi.Send(wifi.lastsocket,cad,3000);
-  return auxerr;
+  return wifi.Send(wifi.lastsocket,cad,3000);;
   }
 
 int envpartP (const prog_uchar *cadP, boolean sumar)
@@ -401,23 +432,14 @@ int envrelleno(int prelen, int auxlen, int resto)
   return envpart(auxsend,false);
   }
   
-void envheader(int prelen)
+void envheader(int prelen, char *otherurl, boolean other)
   {
   char buff[6]; memset(buff,0,sizeof(buff));
   char auxsend[70]; memset(auxsend,0,sizeof(auxsend));
-  strcatP(auxsend,header_i);
-  strcat(auxsend,itoa(prelen,buff,10));
-  strcatP(auxsend,header_f);
-  envpart(auxsend,false);
-  }
-  
-void envheaderotherurl(int prelen, char *otherurl)
-  {
-  char buff[6]; memset(buff,0,sizeof(buff));
-  char auxsend[70]; memset(auxsend,0,sizeof(auxsend));
-  strcatP(auxsend,headerother_i);
-  strcat(auxsend,otherurl);
-  strcatP(auxsend,header_f);
+  if (other)
+    strcatPtP(auxsend,headerother_i,otherurl,header_f);
+  else
+    strcatPtP(auxsend,header_i,itoa(prelen,buff,10),header_f);
   envpart(auxsend,false);
   }
   
@@ -428,38 +450,38 @@ void envdato(int tipo, int first, int last, const prog_uchar *cadP)
   memset(auxsend,0x00,sizeof(auxsend));
   for (int i=first; i<last; i++)
     {
-    strcatP(auxsend,tr,td,cadP,b);
-    strcat(auxsend,itoa(i+1,buff,10));
-    strcatP(auxsend,td_f);
     if (tipo==1)  // entradas digitales
       {
-      int auxst=digitalRead(edPin[i]);
-      strcatP(auxsend,auxst==0?td:tdcolor,auxst==0?OFF:ON);
+      int auxst=midigitalRead(edPin[i]);
+      strcatP(auxsend,tr,auxst==0?td:tdcolor,cadP,b);
+      strcat(auxsend,itoa(i+1,buff,10));
+      strcatP(auxsend,td_f,tr_f); 
       }
     else
       if (tipo==2)  // salidas digitales
         {
-        strcatP(auxsend,getbit8(bestado,sdPin[i])==0?td:tdcolor,hrefon);
-        strcat(auxsend,itoa(i,buff,10));
-        strcatP(auxsend,mayor,ON,a_f,td_f);
-        strcatP(auxsend,td,hrefoff);
-        strcat(auxsend,itoa(i,buff,10));
-        strcatP(auxsend,mayor,OFF,a_f);
+        boolean isON=(getbit8(bestado,sdPin[i])==1);
+        strcatP(auxsend,tr,isON?tdcolor:td);
+        strcatPtP(auxsend,isON?hrefoff:hrefon,itoa(i+1,buff,10),mayor);
+        strcatPt(auxsend,cadP,itoa(i+1,buff,10));
+        strcatP(auxsend,td_f,tr_f);
         }
-      else
+      else    
         {
-        strcatP(auxsend,td);
-        if (tipo==3)
+        strcatP(auxsend,tr,td,cadP,b);
+        strcat(auxsend,itoa(i+1,buff,10));
+        strcatP(auxsend,td_f,td);
+        if (tipo==3)  // entradas analógicas
+          {
           strcat(auxsend,itoa(analogRead(anPin[i]),buff,10));
-        else
+          }
+        else          // sondas temperatura
           {
           strcat(auxsend,itoa(valoresTemp[i]/100,buff,10));
-          strcatP(auxsend,coma);
-          strcat(auxsend,itoa(valoresTemp[i]%100,buff,10));
-          strcatP(auxsend,celsius);
+          strcatPtP(auxsend,coma,itoa(valoresTemp[i]%100,buff,10),celsius); 
           }
+        strcatP(auxsend,td_f,tr_f); 
         }
-    strcatP(auxsend,td_f,tr_f); 
     }
   envpart(auxsend,true);
   }
@@ -467,7 +489,7 @@ void envdato(int tipo, int first, int last, const prog_uchar *cadP)
 void indexhtml()
   {
     int prelength=1200;
-    envheader(prelength);
+    envheader(prelength,"",false);
     envpartP(htmlbodytable, true);
     envdato(1,0,maxEDr,entdig);
     for (int i=0; i<maxSDr; i++) 
@@ -490,17 +512,13 @@ int envvalor(const prog_uchar *tit, int numpar, char *valor, int len, int tipo)
   strcatP(auxsend,td_f,td,tipo==1?inputtypetext:inputtypesubmit);
   if (tipo==1)
     {
-    strcatP(auxsend,name);
-      strcat(auxsend,itoa(numpar,buff,10));
-    strcatP(auxsend,name_f);
+    strcatPtP(auxsend,name,itoa(numpar,buff,10),name_f);
     }
-  strcatP(auxsend,value);
-    strcat(auxsend,valor);
-  strcatP(auxsend,value_f,size);
-    strcat(auxsend,itoa(len,buff,10));
-  strcatP(auxsend,size_f,value_f,maxlength);
-    strcat(auxsend,itoa(len,buff,10));
-  strcatP(auxsend,maxlength_f,inputtypetext_f,td_f, tr_f);
+  strcatPtP(auxsend,value,valor,value_f);
+  strcatPtP(auxsend,size,itoa(len,buff,10),size_f);
+  strcatP(auxsend,value_f);
+  strcatPtP(auxsend,maxlength,itoa(len,buff,10),maxlength_f);
+  strcatP(auxsend,inputtypetext_f,td_f, tr_f);
   return envpart(auxsend,true);
   }
 
@@ -508,8 +526,9 @@ int envsonda(int pos, const prog_uchar *tit)
   {
   char buff[6]; memset(buff,0,sizeof(buff));
   char auxsend[128]; memset(auxsend, 0, sizeof(auxsend));
-  strcatP(auxsend,tr,td,tit,td_f); 
-  strcatP(auxsend,td);
+  strcatP(auxsend,tr,td,tit,b); 
+  strcat(auxsend, itoa(pos,buff,10));
+  strcatP(auxsend,td_f,td);
   for (int i=0; i<8; i++)
     {
     strcat(auxsend,addr[pos][i]<16?"0":itoa(addr[pos][i]/16,buff,16));
@@ -524,8 +543,7 @@ int envstring(const prog_uchar *tit, char *cad)
   char buff[6]; memset(buff,0,sizeof(buff));
   char auxsend[128]; memset(auxsend, 0, sizeof(auxsend));
   strcatP(auxsend,tr,td,tit,td_f); 
-  strcatP(auxsend,td);
-  strcat(auxsend,cad);
+  strcatPt(auxsend,td,cad);
   strcatP(auxsend,td_f,tr_f);
   return envpart(auxsend,true);
   }
@@ -542,18 +560,17 @@ void setuphtml(boolean clearurl)
     // headers
     if (clearurl)
       {
-      envheaderotherurl(prelength,"/setup");
+      envheader(prelength,"/setup",true);
       }
     else
       {
-      envheader(prelength);
+      envheader(prelength,"",false);
       // body  
       envpartP(htmlbody, true);
       envpartP(menusetup,true);
       envstring(version,wifi._ver);
-      if (envsonda(0,sondauno)<0) return;
-      if (envsonda(1,sondados)<0) return;
-      if (envsonda(2,sondatres)<0) return;
+      for (int i=0; i<3; i++)
+        if (envsonda(i,sonda)<0) return; 
       if (envpartP(form, true)<0) return;
       if (envvalor(ID,1,itoa(wifi._myID,buff,10),3,1)<0) return;
       if (envvalor(Modo,2,itoa(modo,buff,10),1,1)<0) return; 
@@ -579,7 +596,7 @@ void jsonhtml()
   {
     formaJson();
     int prelength=120;
-    envheader(prelength);
+    envheader(prelength,"",false);
     envpart(wifi.inputstr,true);
     envrelleno(prelength,auxlength,0);
   }  
@@ -619,7 +636,6 @@ void saveparm()
 void procesaGet()    // procesa peticiones GET ...
   {
   auxlength=0;  
-  dserial.println(wifi._comando);
   if (modo==2)    // gateway
     {
      if (strcmp(wifi._comando,json)==0)    // /json
@@ -629,7 +645,7 @@ void procesaGet()    // procesa peticiones GET ...
        }
      if (strcmp(wifi._comando,mainr)==0)    // /mainr
        {
-       enviaJson(false); // es respuesta
+       enviamainr(false); // es respuesta
        return;
        }
      if (strcmp(wifi._comando,jsonr)==0)    // /jsonr
@@ -642,57 +658,49 @@ void procesaGet()    // procesa peticiones GET ...
      {
      if (strcmp(wifi._comando,"on")==0)
        {
-       pinVAL(sdPin[wifi.inputstr[19]-48],1);
+       pinVAL(sdPin[wifi.inputstr[19]-48]-1,1);
        guardarEstado();
        strcpy(wifi._comando,"index");
        }
-     else
-       if (strcmp(wifi._comando,"off")==0)
-         {
-         pinVAL(sdPin[wifi.inputstr[20]-48],0);
-         guardarEstado();
-         strcpy(wifi._comando,"index");
-         }
+     if (strcmp(wifi._comando,"off")==0)
+       {
+       pinVAL(sdPin[wifi.inputstr[20]-48]-1,0);
+       guardarEstado();
+       strcpy(wifi._comando,"index");
+       }
      if (strcmp(wifi._comando,"index")==0)    // index
        {
        indexhtml();
        printlnS(OK);
-//        wifi.CIPClose(myid);
-        return;
        }
-     if (strcmp(wifi._comando,"setup")==0)    // index
+     if (strcmp(wifi._comando,"setup")==0)    // setup
        {
-       setuphtml(false);
+       indexhtml();
+//       setuphtml(false);
        printlnS(OK);
-//        wifi.CIPClose(myid);
-        return;
        }
      if (strcmp(wifi._comando,"json")==0)    // json
        {
         jsonhtml();
         printlnS(OK);
-////        wifi.CIPClose(myid);
-        return;
+       }
+     if (strcmp(wifi._comando,mainr)==0)    // /mainr
+       {
+       enviamainr(false); // es respuesta
        }
      if (strcmp(wifi._comando,"favicon")==0)    // index
        {
        envfavicon();
-//        wifi.CIPClose(myid);
-       return;
        }
      if (strcmp(wifi._comando,"404")==0)    // json
        {
         envpartP(resp_404, false);
-//        wifi.CIPClose(myid);
-        return;
        }
      if (strcmp(wifi._comando,"save")==0)    // save data
        {
        saveparm();
        setuphtml(true);
        printlnS(OK);
-//        wifi.CIPClose(myid);
-        return;
        }
       }
   }
@@ -700,20 +708,19 @@ void procesaGet()    // procesa peticiones GET ...
 void initESP8266()
 {
   wifi.init(57600);  // inicia puerto serie ESP8266
-  printS(treset,b,wifi.Reset()>=0?OK:ERROR);  // Reset ESP826
-  dserial.println();
+  printS(treset,b,wifi.Reset()>=0?OK:ERROR,crlf);  // Reset ESP826
   delay(5000);
   wifi.clearResults();
-  printS(Modo,dospuntos); dserial.print(modo); printS(b); printlnS(modo==0?Cwsap:sta);
+  printS(Modo,dospuntos); dserial.print(modo); printS(b,modo==0?Cwsap:sta,crlf);
   
   printS(version,b,wifi.getVer()>=0?b:ERROR,b);  
   dserial.println(wifi._ver);
   printS(muxmode,b,((wifi.setMux(1)>=0)?b:ERROR),b); 
   dserial.println(wifi._CIPMux);
-  printS(RT,dospuntos,b); 
-    dserial.print(wifi._RTssid);printS(coma);   dserial.println(wifi._RTpass);
-  printS(gw,dospuntos,b); 
-    dserial.print(wifi._GWssid);printS(coma);
+  printS(RT,dospuntos); 
+    printStS(b,wifi._RTssid,coma);   dserial.println(wifi._RTpass);
+  printS(gw,dospuntos); 
+    printStS(b,wifi._GWssid,coma);
     dserial.println(wifi._GWpass);
   printS(Cwsap,dospuntos,b); 
     dserial.print(wifi._APssid);printS(coma);
@@ -724,24 +731,25 @@ void initESP8266()
     printS(blancoscwmode,b,wifi.setCWMode(AP)>=0?b:ERROR,b); 
     dserial.println(wifi._CWMode);
     printS(Cwsap,dospuntos,b,wifi.setCWSAP(wifi._APssid,wifi._APpass,wifi._APch,wifi._APenc)>=0?b:ERROR,b); 
-    printS(openserver,b,wifi.openServer(wifi._myPort)>=0?OK:ERROR);dserial.println();
-    printS(blancoIP,b); dserial.print(wifi._gwIP);printS(dospuntos);
+    printS(openserver,b,wifi.openServer(wifi._myPort)>=0?OK:ERROR,crlf);
+    printS(blancoIP);printStS(b,wifi._gwIP,dospuntos);
     }
   if (modo==1)  // cliente de Router
     {
     printS(blancoscwmode,b,wifi.setCWMode(STA)>=0?b:ERROR,b); dserial.println(wifi._CWMode);
-    printS(conectando,b); dserial.print(wifi._RTssid); printS(b);
-    printS(wifi.joinAP(wifi._RTssid,wifi._RTpass,10000)>=0?OK:ERROR,b); dserial.println();
-    printS(openserver,b,wifi.openServer(wifi._myPort)>=0?OK:ERROR);dserial.println();
-    printS(blancoIP,b,wifi.getIP()>=0?b:ERROR); dserial.print(wifi._myIP);printS(dospuntos);
+    printS(conectando); printStS(b,wifi._RTssid,b);
+    printS(wifi.joinAP(wifi._RTssid,wifi._RTpass,10000)>=0?OK:ERROR,b,crlf);
+    printS(openserver,b,wifi.openServer(wifi._myPort)>=0?OK:ERROR,crlf);
+    printS(blancoIP,b); printStS(wifi.getIP()>=0?b:ERROR,wifi._myIP,dospuntos);
     }
   if (modo==2)  // cliente de gateway
     {
-    printS(blancoscwmode,b,wifi.setCWMode(STA)>=0?b:ERROR,b); dserial.println(wifi._CWMode);
-    printS(conectando,b); dserial.print(wifi._GWssid); printS(b);
-    printS(wifi.joinAP(wifi._GWssid,wifi._GWpass,10000)>=0?OK:ERROR,b); dserial.println();
-    printS(openserver,b,wifi.openServer(wifi._myPort)>=0?OK:ERROR);dserial.println();
-    printS(blancoIP,b,wifi.getIP()>=0?b:ERROR); dserial.print(wifi._myIP);printS(dospuntos);
+    printS(blancoscwmode,b,wifi.setCWMode(STA)>=0?b:ERROR,b,crlf); 
+//    dserial.println(wifi._CWMode);
+    printS(conectando); printStS(b,wifi._GWssid,b);
+    printS(wifi.joinAP(wifi._GWssid,wifi._GWpass,10000)>=0?OK:ERROR,b,crlf); 
+    printS(openserver,b,wifi.openServer(wifi._myPort)>=0?OK:ERROR,crlf);
+    printS(blancoIP,b); printStS(wifi.getIP()>=0?b:ERROR,wifi._myIP,dospuntos);
     }
   dserial.println(wifi._myPort);
   printS(cipstatus,b,wifi.getCIPStatus()>=0?b:ERROR,b); 
@@ -751,7 +759,7 @@ void initESP8266()
 void confOutput(int pin)
 {
   pinMode(pin, INPUT);
-  digitalWrite(pin,HIGH);
+  midigitalWrite(pin,HIGH);
   pinMode(pin,OUTPUT);    
 }
 
@@ -759,18 +767,18 @@ void confOutput(int pin)
 void setup()
 {
   // configurar hardware
-  dserial.begin(57600);
+  dserial.begin(115200);
   delay(100);
   for (int i=0; i<maxEDr; i++) {   // entradas digitales
     pinMode(edPin[i],INPUT);       // define como entradas pines entradas digitales
-    digitalWrite(edPin[i],HIGH);   // activa pull-up
+    midigitalWrite(edPin[i],HIGH);   // activa pull-up
     }
   for (int i=0; i<=maxSDr; i++) 
     confOutput(sdPin[i]);
   confOutput(espResetPin);
-  digitalWrite(espResetPin,HIGH); 
+  midigitalWrite(espResetPin,HIGH); 
   
-//  if (digitalRead(6)==0)
+//  if (midigitalRead(6)==0)
 //    iniciavalores();
 
   if (REINICIAR)
@@ -805,7 +813,7 @@ void setup()
          if (addr[i][j] < 16) printS(cero);
          dserial.print(addr[i][j], HEX);   
          }
-       dserial.println();
+       printS(crlf);
        }
   if (modo==2)    // cliente gateway
     {
@@ -855,6 +863,7 @@ void loop()
     
   if (wifi.msgReceived)    // se ha localizado la cadena final de búsqueda
     {
+//    dserial.print(wifi._comtype);
     if (wifi._comtype==0) {printS(noesperado); dserial.println(wifi.inputstr);}
     else
     if (wifi._comtype==1) procesaGet();
@@ -877,8 +886,8 @@ void loop()
   // si cambia el estado de alguna entrada digital, se envía el estado sin esperar el tiempo
   if (!iniciando)
    {
-    setbit8(bestado, edPin[0], digitalRead(edPin[0]));
-    setbit8(bestado, edPin[1], digitalRead(edPin[1]));
+    setbit8(bestado, edPin[0], midigitalRead(edPin[0]));
+    setbit8(bestado, edPin[1], midigitalRead(edPin[1]));
     if ((oldED0!=getbit8(bestado,edPin[0])) || (oldED1!=getbit8(bestado,edPin[1])))
       {
       oldED0=getbit8(bestado,edPin[0]);
